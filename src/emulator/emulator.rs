@@ -75,14 +75,34 @@ impl EmulatorState {
 
     }
 
+    pub fn run(&mut self) {
+
+        if self.rom.is_none() {
+            panic!("rom was not loaded prior to running the emulator.")
+        }
+
+        self.fetch();
+
+        self.decode();
+
+        self.execute();
+
+    }
+
     pub fn load_rom(&mut self, path: PathBuf) {
         let contents_result = fs::read(&path);
 
+        //read rom from file
         let rom = if contents_result.is_ok() {
             contents_result.unwrap()
         } else {
             panic!("could not load file at path: {}", &path.to_str().unwrap())
         };
+
+        // Load rom into memory
+        for (i, val) in rom.iter().enumerate() {
+            self.ram[i + 0x200] = val.to_owned();
+        }
 
         self.rom = Some(rom)
 
@@ -100,18 +120,18 @@ impl EmulatorState {
         Program counter is incremented by two after reading both bytes.
     */
     fn fetch(&self) {
-
+        println!("fetch")
     }
 
     /**
         This decodes the instruction (op_code) found in fetch to find out what needs to be done next.
     */
     fn decode(&self) {
-
+        println!("decode")
     }
 
     fn execute(&self) {
-
+        println!("execute")
     }
 
     fn draw_screen(&self, frame: &mut [u8]) {
@@ -163,3 +183,29 @@ fn rom_load_test() {
     assert_eq!(0xE0, rom[rom.len() - 1]);
 }
 
+#[test]
+fn run_cycle_test() {
+
+    let mut path_buf = PathBuf::new();
+
+    path_buf.push(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
+
+    let mut emulator_state = EmulatorState::new();
+
+    emulator_state.load_rom(path_buf);
+
+    emulator_state.run();
+
+    let memory = &emulator_state.ram;
+    let pc = &emulator_state.program_counter + 0;
+
+    println!("{} {:#02x} {:#02x}", pc, memory[pc as usize], memory[(pc as usize) + 1])
+
+}
+
+#[test]
+fn sample_test() {
+    println!("{:#06x}", 0xA22A & 0xF000);
+
+    println!("{:#06x}", 0xA22A & 0xF0FF)
+}
