@@ -156,8 +156,10 @@ fn rom_load_test() {
 
     assert_eq!(&132, &emulator_state.rom.as_ref().unwrap().len());
 
-    println!("{:?}", &emulator_state.rom.as_ref().unwrap());
-    println!("{:?}", &emulator_state.rom.as_ref().unwrap().len())
+    let rom = emulator_state.rom.as_ref().unwrap();
 
+    assert_eq!(0, rom[0]);
+    assert_eq!(0xE0, rom[1]);
+    assert_eq!(0xE0, rom[rom.len() - 1]);
 }
 
