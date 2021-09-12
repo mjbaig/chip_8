@@ -1,4 +1,6 @@
 use rand::distributions::uniform::SampleBorrow;
+use std::fs;
+use std::path::PathBuf;
 
 const FONT_DATA: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, //0
@@ -37,7 +39,9 @@ pub struct EmulatorState {
     /* Operation code for cpu and whatever */
     op_code: u16,
     /* Graphics buffer to hold pixel data */
-    pub graphics_buffer: [u8; 64 * 32]
+    pub graphics_buffer: [u8; 64 * 32],
+    /* rom file to be loaded */
+    rom: Option<Vec<u8>>
 }
 
 impl Default for EmulatorState {
@@ -51,7 +55,8 @@ impl Default for EmulatorState {
             sound_timer: 0,
             general_variable_registers: [0; 16],
             graphics_buffer: [0; 64 * 32],
-            op_code: 0
+            op_code: 0,
+            rom: None
         }
     }
 }
@@ -67,6 +72,19 @@ impl EmulatorState {
     }
 
     pub fn register_keypress(&self) {
+
+    }
+
+    pub fn load_rom(&mut self, path: PathBuf) {
+        let contents_result = fs::read(&path);
+
+        let rom = if contents_result.is_ok() {
+            contents_result.unwrap()
+        } else {
+            panic!("could not load file at path: {}", &path.to_str().unwrap())
+        };
+
+        self.rom = Some(rom)
 
     }
 
@@ -120,6 +138,26 @@ fn emulator_creation_test() {
     let emulator_state = EmulatorState::new();
 
     println!("{:?}", emulator_state.ram)
+
+}
+
+#[test]
+fn rom_load_test() {
+
+    let mut path_buf = PathBuf::new();
+
+    path_buf.push(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
+
+    let mut emulator_state = EmulatorState::new();
+
+    emulator_state.load_rom(path_buf);
+
+    assert!(&emulator_state.rom.as_ref().is_some());
+
+    assert_eq!(&132, &emulator_state.rom.as_ref().unwrap().len());
+
+    println!("{:?}", &emulator_state.rom.as_ref().unwrap());
+    println!("{:?}", &emulator_state.rom.as_ref().unwrap().len())
 
 }
 

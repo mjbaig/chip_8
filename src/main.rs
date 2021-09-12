@@ -66,6 +66,7 @@ fn main() -> Result<(), Error> {
     });
 }
 
+//This struct is temporary. I made it so that I could see that the screen is displaying pixels.
 struct ViewPort {}
 
 impl ViewPort {
@@ -74,6 +75,7 @@ impl ViewPort {
     }
 
     fn draw(&self, frame: &mut [u8]) {
+        println!("{}", frame.len());
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let num = rand::thread_rng().gen_range(1..10);
 
