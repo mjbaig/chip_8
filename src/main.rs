@@ -13,7 +13,6 @@ use log::error;
 use std::sync::Mutex;
 use rand::Rng;
 use emulator::EmulatorState;
-use std::borrow::Borrow;
 
 lazy_static! {
     static ref EMULATOR_STATE: Mutex<EmulatorState> = Mutex::new(EmulatorState::new());
@@ -21,7 +20,6 @@ lazy_static! {
 
 const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
-const BOX_SIZE: i16 = 64;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
@@ -29,8 +27,6 @@ fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
 
     let mut input = WinitInputHelper::new();
-
-    println!("{:?}", EMULATOR_STATE.lock().unwrap().ram);
 
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
@@ -81,8 +77,12 @@ impl ViewPort {
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let num = rand::thread_rng().gen_range(1..10);
 
+            let random_red = rand::thread_rng().gen_range(0x00..0xFF);
+            let random_green = rand::thread_rng().gen_range(0x00..0xFF);
+            let random_blue = rand::thread_rng().gen_range(0x00..0xFF);
+
             let rgba = if (i % num) == 0 {
-                [0x5e, 0x48, 0xe8, 0xff]
+                [random_red, random_green, random_blue, 0xff]
             } else {
                 [0x00, 0x00, 0x00, 0xff]
             };
