@@ -43,11 +43,12 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    let view_port = ViewPort::new();
+    EMULATOR_STATE.lock().unwrap().load_rom(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
 
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
-            view_port.draw(pixels.get_frame());
+
+            EMULATOR_STATE.lock().unwrap().draw_screen(pixels.get_frame());
 
             if pixels.render().map_err(|e| error!("pixels.render() failed {}", e)).is_err() {
                 *control_flow = ControlFlow::Exit;
@@ -60,6 +61,8 @@ fn main() -> Result<(), Error> {
                 *control_flow = ControlFlow::Exit;
                 return;
             }
+
+            EMULATOR_STATE.lock().unwrap().tick();
 
             window.request_redraw();
         }

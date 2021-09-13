@@ -70,7 +70,7 @@ impl EmulatorState {
 
     pub fn register_keypress(&self) {}
 
-    pub fn run(&mut self) {
+    pub fn tick(&mut self) {
         if self.rom.is_none() {
             panic!("rom was not loaded prior to running the emulator.")
         }
@@ -103,6 +103,18 @@ impl EmulatorState {
         }
     }
 
+    pub fn draw_screen(&self, frame: &mut [u8]) {
+        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
+
+            let rgba = if self.graphics_buffer[i] == 1 {
+                [0x5e, 0x48, 0xe8, 0xff]
+            } else {
+                [0x48, 0xb2, 0xe8, 0xff]
+            };
+
+            pixel.copy_from_slice(&rgba);
+        }
+    }
 
     /// Reads the instruction that the program counter is pointing to in memory.
     /// Each instruction is 2 bytes, so this reads two bytes in a row and combines them into a single instruction
@@ -139,20 +151,8 @@ impl EmulatorState {
             0x6000 => self.set_register(),
             0x7000 => self.add_value_to_register(),
             0xA000 => self.set_index_register(),
-            0xD000 => println!("drawing to screen"),
+            0xD000 => self.draw(),
             _ => panic!("{:#06x} has not been implemented yet", self.op_code)
-        }
-    }
-
-    fn draw_screen(&self, frame: &mut [u8]) {
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let rgba = if self.graphics_buffer[i] == 1 {
-                [0x5e, 0x48, 0xe8, 0xff]
-            } else {
-                [0x48, 0xb2, 0xe8, 0xff]
-            };
-
-            pixel.copy_from_slice(&rgba);
         }
     }
 
@@ -189,6 +189,7 @@ impl EmulatorState {
         self.program_counter = self.op_code & 0x0FFF;
     }
 
+    /// Sets the last two nibbles of the given command to the value register at index X (7XNN)
     fn set_register(&mut self) {
         println!("set register");
         let op_code = self.op_code;
@@ -199,7 +200,7 @@ impl EmulatorState {
         self.general_variable_registers[x as usize] = value_nn;
     }
 
-    /// Adds the last to nibbles of the given command to the value register at index X (7XNN)
+    /// Adds the last two nibbles of the given command to the value register at index X (7XNN)
     fn add_value_to_register(&mut self) {
         println!("add value to register");
         let op_code = self.op_code;
@@ -207,8 +208,7 @@ impl EmulatorState {
 
         let value_nn = (op_code & 0x00FF) as u8;
 
-        self.general_variable_registers[x as usize] =
-            self.general_variable_registers[x as usize] + value_nn;
+        self.general_variable_registers[x as usize] += value_nn;
     }
 
     /// Sets the index register to the last 3 nibbles of the given command (ANNN)
@@ -216,6 +216,43 @@ impl EmulatorState {
         println!("set index register");
         self.index_register = self.op_code & 0x0FFF
     }
+
+    /// Draws a pixel (DXYN)
+    fn draw(&mut self) {
+        let op_code = self.op_code;
+
+        let ram = self.ram;
+
+        let x_index = ((op_code & 0x0F00 ) >> 8) as usize;
+        let x_coordinate = self.general_variable_registers[x_index] % 64 /* mod 64 so that the value can wrap */;
+
+        let y_index = ((op_code & 0x00F0) >> 4) as usize;
+        let y_coordinate = self.general_variable_registers[y_index] % 32 /* mod 32 so that the value can wrap */;
+
+        let height = op_code & 0x000F;
+
+        self.general_variable_registers[0xF] = 0; /* TODO find out why I set V0 to 0 */
+
+        let mut pixel: u8;
+
+        for row in 0..height {
+
+            pixel = ram[(self.index_register + row) as usize];
+
+            for column in 0..8 {
+                if (pixel & (0x80 >> column)) != 0 {
+                    if self.graphics_buffer[(x_coordinate + column + (y_coordinate + row as u8)) as usize] == 1 {
+                        self.general_variable_registers[0xF] = 0;
+                    }
+                    self.graphics_buffer[(x_coordinate + column + (y_coordinate + row as u8)) as usize] ^= 1;
+                }
+            }
+
+        }
+
+        println!("drawing to screen")
+    }
+
 }
 
 #[test]
@@ -253,7 +290,7 @@ fn run_cycle_test() {
     emulator_state.load_rom(path);
 
     //runs a single cycle
-    emulator_state.run();
+    emulator_state.tick();
 
     //this should be the opcode after a single cycle
     assert_eq!(0x00e0, emulator_state.op_code);
@@ -268,15 +305,14 @@ fn sample_test() {
     emulator_state.load_rom(path);
 
     for x in [1; 500] {
-        emulator_state.run();
+        emulator_state.tick();
     }
 }
 
 #[test]
 fn sample_test_2() {
-    let op_code: u32 = 0x6971;
 
-    let x = (op_code & 0x00FF) as u8;
+    let x = 1;
 
-    println!("{:#06x}", x)
+    println!("{:#06x}",  x ^ 0)
 }
