@@ -1,6 +1,6 @@
 use rand::distributions::uniform::SampleBorrow;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 const FONT_DATA: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, //0
@@ -46,9 +46,10 @@ pub struct EmulatorState {
     should_redraw: bool
 }
 
-impl Default for EmulatorState {
-    fn default() -> Self {
-        EmulatorState {
+impl EmulatorState {
+
+    pub fn new() -> Self {
+        let mut emulator_state = EmulatorState {
             ram: [0; 4096],
             program_counter: 0x200,
             index_register: 0,
@@ -60,14 +61,7 @@ impl Default for EmulatorState {
             op_code: 0,
             rom: None,
             should_redraw: true
-        }
-    }
-}
-
-impl EmulatorState {
-
-    pub fn new() -> Self {
-        let mut emulator_state = Self::default();
+        };
 
         emulator_state.set_font_data();
 
@@ -90,14 +84,13 @@ impl EmulatorState {
 
     }
 
-    pub fn load_rom(&mut self, path: PathBuf) {
+    pub fn load_rom<P: AsRef<Path>>(&mut self, path: P) {
         let contents_result = fs::read(&path);
 
-        //read rom from file
-        let rom = if contents_result.is_ok() {
-            contents_result.unwrap()
-        } else {
-            panic!("could not load file at path: {}", &path.to_str().unwrap())
+        let rom= match contents_result {
+            Ok(T) => T,
+            Err(E) => panic!("could not load file at path: {}. Full Error: {}",
+                             &path.as_ref().to_str().unwrap(), E)
         };
 
         // Load rom into memory
@@ -111,19 +104,18 @@ impl EmulatorState {
 
     fn set_font_data(&mut self) {
         for (index, value) in FONT_DATA.iter().enumerate() {
-            self.ram[index] = value.to_owned()
+            self.ram[index] = value.to_owned();
         }
     }
 
-    /**
-        Reads the instruction that the program counter is pointing to in memory.
-        Each instruction is 2 bytes, so this reads two bytes in a row and combines them into a single instruction
-        Program counter is incremented by two after reading both bytes.
-    */
+
+    /// Reads the instruction that the program counter is pointing to in memory.
+    /// Each instruction is 2 bytes, so this reads two bytes in a row and combines them into a single instruction
+    /// Program counter is incremented by two after reading both bytes.
     fn fetch(&mut self) {
 
         let memory = self.ram;
-        let program_counter = self.program_counter + 0;
+        let program_counter = self.program_counter;
 
         let first_byte = (memory[program_counter as usize] as u16) << 8;
         let second_byte = (memory[(program_counter as usize) + 1] as u16);
@@ -131,12 +123,10 @@ impl EmulatorState {
         self.op_code = first_byte | second_byte;
         self.program_counter = self.program_counter + 2;
 
-        println!("fetch")
+        println!("fetch");
     }
 
-    /**
-        This decodes the instruction (op_code) found in fetch to find out what needs to be done next and then execute the command
-    */
+    /// This decodes the instruction (op_code) found in fetch to find out what needs to be done next and then execute the command
     fn decode_and_execute(&mut self) {
 
         let op_code = self.op_code;
@@ -153,7 +143,7 @@ impl EmulatorState {
 
         }
 
-        println!("decode and execute")
+        println!("decode and execute");
     }
 
     fn draw_screen(&self, frame: &mut [u8]) {
@@ -166,32 +156,30 @@ impl EmulatorState {
                 [0x48, 0xb2, 0xe8, 0xff]
             };
 
-            pixel.copy_from_slice(&rgba)
+            pixel.copy_from_slice(&rgba);
 
         }
 
     }
 
-    // 00EO - Clears the graphics buffer and tells the client to redraw the screen.
+    /// 00EO - Clears the graphics buffer and tells the client to redraw the screen.
     fn clear_screen(&mut self) {
         self.graphics_buffer = [0; 64 * 32];
         self.should_redraw = true;
     }
 
-    // 00EE - This returns from the subroutine
+    /// 00EE - This returns from the subroutine
     // TODO test this behavior cause I'm not sure this works properly atm
     fn return_from_subroutine(&mut self) {
         let new_program_counter = self.stack.pop();
 
-        if new_program_counter.is_some() {
-            self.program_counter = new_program_counter.unwrap()
-        } else {
-            panic!("Cannot return from subroutine. The stack was empty.")
+
+        self.program_counter = match new_program_counter {
+            Some(T) => T,
+            None => panic!("Cannot return from subroutine. The stack was empty."),
         }
 
     }
-
-
 
 }
 
@@ -207,13 +195,11 @@ fn emulator_creation_test() {
 #[test]
 fn rom_load_test() {
 
-    let mut path_buf = PathBuf::new();
-
-    path_buf.push(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
+    let path = r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8";
 
     let mut emulator_state = EmulatorState::new();
 
-    emulator_state.load_rom(path_buf);
+    emulator_state.load_rom(path);
 
     assert!(&emulator_state.rom.as_ref().is_some());
 
@@ -229,13 +215,11 @@ fn rom_load_test() {
 #[test]
 fn run_cycle_test() {
 
-    let mut path_buf = PathBuf::new();
-
-    path_buf.push(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
+    let path = r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8";
 
     let mut emulator_state = EmulatorState::new();
 
-    emulator_state.load_rom(path_buf);
+    emulator_state.load_rom(path);
 
     //runs a single cycle
     emulator_state.run();
