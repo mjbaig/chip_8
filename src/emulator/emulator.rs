@@ -1,6 +1,7 @@
 use rand::distributions::uniform::SampleBorrow;
 use std::fs;
 use std::path::{PathBuf, Path};
+use std::time::Duration;
 
 const FONT_DATA: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, //0
@@ -43,11 +44,10 @@ pub struct EmulatorState {
     /* rom file to be loaded */
     rom: Option<Vec<u8>>,
     /* Informs the client that screen must be redrawn */
-    should_redraw: bool
+    should_redraw: bool,
 }
 
 impl EmulatorState {
-
     pub fn new() -> Self {
         let mut emulator_state = EmulatorState {
             ram: [0; 4096],
@@ -60,7 +60,7 @@ impl EmulatorState {
             graphics_buffer: [0; 64 * 32],
             op_code: 0,
             rom: None,
-            should_redraw: true
+            should_redraw: true,
         };
 
         emulator_state.set_font_data();
@@ -68,12 +68,9 @@ impl EmulatorState {
         emulator_state
     }
 
-    pub fn register_keypress(&self) {
-
-    }
+    pub fn register_keypress(&self) {}
 
     pub fn run(&mut self) {
-
         if self.rom.is_none() {
             panic!("rom was not loaded prior to running the emulator.")
         }
@@ -81,13 +78,12 @@ impl EmulatorState {
         self.fetch();
 
         self.decode_and_execute();
-
     }
 
     pub fn load_rom<P: AsRef<Path>>(&mut self, path: P) {
         let contents_result = fs::read(&path);
 
-        let rom= match contents_result {
+        let rom = match contents_result {
             Ok(T) => T,
             Err(E) => panic!("could not load file at path: {}. Full Error: {}",
                              &path.as_ref().to_str().unwrap(), E)
@@ -99,7 +95,6 @@ impl EmulatorState {
         }
 
         self.rom = Some(rom)
-
     }
 
     fn set_font_data(&mut self) {
@@ -113,43 +108,44 @@ impl EmulatorState {
     /// Each instruction is 2 bytes, so this reads two bytes in a row and combines them into a single instruction
     /// Program counter is incremented by two after reading both bytes.
     fn fetch(&mut self) {
-
         let memory = self.ram;
         let program_counter = self.program_counter;
 
-        let first_byte = (memory[program_counter as usize] as u16) << 8;
-        let second_byte = (memory[(program_counter as usize) + 1] as u16);
+        if (program_counter as usize + 1) < memory.len() {
+            let first_byte = (memory[program_counter as usize] as u16) << 8;
+            let second_byte = (memory[(program_counter as usize) + 1] as u16);
 
-        self.op_code = first_byte | second_byte;
-        self.program_counter = self.program_counter + 2;
-
-        println!("fetch");
+            self.op_code = first_byte | second_byte;
+            self.program_counter = self.program_counter + 2;
+        } else {
+            panic!("program counter is pointing outside of available ram")
+        }
     }
 
     /// This decodes the instruction (op_code) found in fetch to find out what needs to be done next and then execute the command
     fn decode_and_execute(&mut self) {
-
         let op_code = self.op_code;
 
         match op_code & 0xF000 {
             0x0000 => {
                 match op_code & 0x000F {
-                    0x000 => self.clear_screen(),
-                    0x00F => self.return_from_subroutine(),
+                    0x0000 => self.clear_screen(),
+                    0x000E => self.return_from_subroutine(),
                     _ => panic!("{:#06x} has not been implemented yet", self.op_code)
                 }
             }
+            0x1000 => self.jump(),
+            0x2000 => self.call_subroutine(),
+            0x6000 => self.set_register(),
+            0x7000 => self.add_value_to_register(),
+            0xA000 => self.set_index_register(),
+            0xD000 => println!("drawing to screen"),
             _ => panic!("{:#06x} has not been implemented yet", self.op_code)
-
         }
-
-        println!("decode and execute");
     }
 
     fn draw_screen(&self, frame: &mut [u8]) {
-
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-
             let rgba = if self.graphics_buffer[i] == 1 {
                 [0x5e, 0x48, 0xe8, 0xff]
             } else {
@@ -157,13 +153,12 @@ impl EmulatorState {
             };
 
             pixel.copy_from_slice(&rgba);
-
         }
-
     }
 
     /// 00EO - Clears the graphics buffer and tells the client to redraw the screen.
     fn clear_screen(&mut self) {
+        println!("clear screen");
         self.graphics_buffer = [0; 64 * 32];
         self.should_redraw = true;
     }
@@ -171,30 +166,67 @@ impl EmulatorState {
     /// 00EE - This returns from the subroutine
     // TODO test this behavior cause I'm not sure this works properly atm
     fn return_from_subroutine(&mut self) {
-        let new_program_counter = self.stack.pop();
+        println!("return from subroutine");
 
+        let new_program_counter = self.stack.pop();
 
         self.program_counter = match new_program_counter {
             Some(T) => T,
             None => panic!("Cannot return from subroutine. The stack was empty."),
         }
-
     }
 
+    /// Jumps to an address represented by the last three nibbles of the given command (1NNN)
+    fn jump(&mut self) {
+        println!("jump");
+        self.program_counter = self.op_code & 0x0FFF;
+    }
+
+    /// Calls subroutine represented by the last three nibbles of the given command (2NNN)
+    fn call_subroutine(&mut self) {
+        println!("call subroutine");
+        self.stack.push(self.program_counter);
+        self.program_counter = self.op_code & 0x0FFF;
+    }
+
+    fn set_register(&mut self) {
+        println!("set register");
+        let op_code = self.op_code;
+        let x = (op_code & 0x0F00) >> 8;
+
+        let value_nn = (op_code & 0x00FF) as u8;
+
+        self.general_variable_registers[x as usize] = value_nn;
+    }
+
+    /// Adds the last to nibbles of the given command to the value register at index X (7XNN)
+    fn add_value_to_register(&mut self) {
+        println!("add value to register");
+        let op_code = self.op_code;
+        let x = (op_code & 0x0F00) >> 8;
+
+        let value_nn = (op_code & 0x00FF) as u8;
+
+        self.general_variable_registers[x as usize] =
+            self.general_variable_registers[x as usize] + value_nn;
+    }
+
+    /// Sets the index register to the last 3 nibbles of the given command (ANNN)
+    fn set_index_register(&mut self) {
+        println!("set index register");
+        self.index_register = self.op_code & 0x0FFF
+    }
 }
 
 #[test]
 fn emulator_creation_test() {
-
     let emulator_state = EmulatorState::new();
 
     println!("{:?}", emulator_state.ram)
-
 }
 
 #[test]
 fn rom_load_test() {
-
     let path = r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8";
 
     let mut emulator_state = EmulatorState::new();
@@ -214,7 +246,6 @@ fn rom_load_test() {
 
 #[test]
 fn run_cycle_test() {
-
     let path = r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8";
 
     let mut emulator_state = EmulatorState::new();
@@ -226,12 +257,26 @@ fn run_cycle_test() {
 
     //this should be the opcode after a single cycle
     assert_eq!(0x00e0, emulator_state.op_code);
-
 }
 
 #[test]
 fn sample_test() {
-    println!("{:#06x}", 0xA200);
+    let path = r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8";
 
-    println!("{:#06x}", 0xA22A & 0xF0FF)
+    let mut emulator_state = EmulatorState::new();
+
+    emulator_state.load_rom(path);
+
+    for x in [1; 500] {
+        emulator_state.run();
+    }
+}
+
+#[test]
+fn sample_test_2() {
+    let op_code: u32 = 0x6971;
+
+    let x = (op_code & 0x00FF) as u8;
+
+    println!("{:#06x}", x)
 }
