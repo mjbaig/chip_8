@@ -41,7 +41,9 @@ pub struct EmulatorState {
     /* Graphics buffer to hold pixel data */
     pub graphics_buffer: [u8; 64 * 32],
     /* rom file to be loaded */
-    rom: Option<Vec<u8>>
+    rom: Option<Vec<u8>>,
+    /* Informs the client that screen must be redrawn */
+    should_redraw: bool
 }
 
 impl Default for EmulatorState {
@@ -56,7 +58,8 @@ impl Default for EmulatorState {
             general_variable_registers: [0; 16],
             graphics_buffer: [0; 64 * 32],
             op_code: 0,
-            rom: None
+            rom: None,
+            should_redraw: true
         }
     }
 }
@@ -83,9 +86,7 @@ impl EmulatorState {
 
         self.fetch();
 
-        self.decode();
-
-        self.execute();
+        self.decode_and_execute();
 
     }
 
@@ -119,19 +120,40 @@ impl EmulatorState {
         Each instruction is 2 bytes, so this reads two bytes in a row and combines them into a single instruction
         Program counter is incremented by two after reading both bytes.
     */
-    fn fetch(&self) {
+    fn fetch(&mut self) {
+
+        let memory = self.ram;
+        let program_counter = self.program_counter + 0;
+
+        let first_byte = (memory[program_counter as usize] as u16) << 8;
+        let second_byte = (memory[(program_counter as usize) + 1] as u16);
+
+        self.op_code = first_byte | second_byte;
+        self.program_counter = self.program_counter + 2;
+
         println!("fetch")
     }
 
     /**
-        This decodes the instruction (op_code) found in fetch to find out what needs to be done next.
+        This decodes the instruction (op_code) found in fetch to find out what needs to be done next and then execute the command
     */
-    fn decode(&self) {
-        println!("decode")
-    }
+    fn decode_and_execute(&mut self) {
 
-    fn execute(&self) {
-        println!("execute")
+        let op_code = self.op_code;
+
+        match op_code & 0xF000 {
+            0x0000 => {
+                match op_code & 0x000F {
+                    0x000 => self.clear_screen(),
+                    0x00F => self.return_from_subroutine(),
+                    _ => panic!("{:#06x} has not been implemented yet", self.op_code)
+                }
+            }
+            _ => panic!("{:#06x} has not been implemented yet", self.op_code)
+
+        }
+
+        println!("decode and execute")
     }
 
     fn draw_screen(&self, frame: &mut [u8]) {
@@ -149,6 +171,27 @@ impl EmulatorState {
         }
 
     }
+
+    // 00EO - Clears the graphics buffer and tells the client to redraw the screen.
+    fn clear_screen(&mut self) {
+        self.graphics_buffer = [0; 64 * 32];
+        self.should_redraw = true;
+    }
+
+    // 00EE - This returns from the subroutine
+    // TODO test this behavior cause I'm not sure this works properly atm
+    fn return_from_subroutine(&mut self) {
+        let new_program_counter = self.stack.pop();
+
+        if new_program_counter.is_some() {
+            self.program_counter = new_program_counter.unwrap()
+        } else {
+            panic!("Cannot return from subroutine. The stack was empty.")
+        }
+
+    }
+
+
 
 }
 
@@ -194,18 +237,17 @@ fn run_cycle_test() {
 
     emulator_state.load_rom(path_buf);
 
+    //runs a single cycle
     emulator_state.run();
 
-    let memory = &emulator_state.ram;
-    let pc = &emulator_state.program_counter + 0;
-
-    println!("{} {:#02x} {:#02x}", pc, memory[pc as usize], memory[(pc as usize) + 1])
+    //this should be the opcode after a single cycle
+    assert_eq!(0x00e0, emulator_state.op_code);
 
 }
 
 #[test]
 fn sample_test() {
-    println!("{:#06x}", 0xA22A & 0xF000);
+    println!("{:#06x}", 0xA200);
 
     println!("{:#06x}", 0xA22A & 0xF0FF)
 }
