@@ -3,6 +3,9 @@ use std::fs;
 use std::path::{PathBuf, Path};
 use std::time::Duration;
 
+const WIDTH: u32 = 64;
+const HEIGHT: u32 = 32;
+
 const FONT_DATA: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, //0
     0x20, 0x60, 0x20, 0x20, 0x70, //1
@@ -57,7 +60,7 @@ impl EmulatorState {
             delay_timer: 0,
             sound_timer: 0,
             general_variable_registers: [0; 16],
-            graphics_buffer: [0; 64 * 32],
+            graphics_buffer: [0; (WIDTH * HEIGHT) as usize],
             op_code: 0,
             rom: None,
             should_redraw: true,
@@ -66,6 +69,14 @@ impl EmulatorState {
         emulator_state.set_font_data();
 
         emulator_state
+    }
+
+    pub fn screen_height(&self) -> u32 {
+        return HEIGHT;
+    }
+
+    pub fn screen_width(&self) -> u32 {
+        return WIDTH;
     }
 
     pub fn register_keypress(&self) {}
@@ -105,7 +116,6 @@ impl EmulatorState {
 
     pub fn draw_screen(&self, frame: &mut [u8]) {
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-
             let rgba = if self.graphics_buffer[i] == 1 {
                 [0x5e, 0x48, 0xe8, 0xff]
             } else {
@@ -158,7 +168,7 @@ impl EmulatorState {
 
     /// 00EO - Clears the graphics buffer and tells the client to redraw the screen.
     fn clear_screen(&mut self) {
-        println!("clear screen");
+        println!("clearing screen");
         self.graphics_buffer = [0; 64 * 32];
         self.should_redraw = true;
     }
@@ -166,9 +176,9 @@ impl EmulatorState {
     /// 00EE - This returns from the subroutine
     // TODO test this behavior cause I'm not sure this works properly atm
     fn return_from_subroutine(&mut self) {
-        println!("return from subroutine");
-
         let new_program_counter = self.stack.pop();
+
+        println!("returning from subroutine");
 
         self.program_counter = match new_program_counter {
             Some(T) => T,
@@ -178,43 +188,46 @@ impl EmulatorState {
 
     /// Jumps to an address represented by the last three nibbles of the given command (1NNN)
     fn jump(&mut self) {
-        println!("jump");
         self.program_counter = self.op_code & 0x0FFF;
     }
 
     /// Calls subroutine represented by the last three nibbles of the given command (2NNN)
     fn call_subroutine(&mut self) {
-        println!("call subroutine");
+
+        println!("calling from subroutine");
+
         self.stack.push(self.program_counter);
         self.program_counter = self.op_code & 0x0FFF;
     }
 
-    /// Sets the last two nibbles of the given command to the value register at index X (7XNN)
+    /// Sets the last two nibbles of the given command to the value register at index X (6XNN)
     fn set_register(&mut self) {
-        println!("set register");
         let op_code = self.op_code;
         let x = (op_code & 0x0F00) >> 8;
 
         let value_nn = (op_code & 0x00FF) as u8;
+
+        println!("setting {:#06x} to register at {:#06x}", &value_nn, &x);
 
         self.general_variable_registers[x as usize] = value_nn;
     }
 
     /// Adds the last two nibbles of the given command to the value register at index X (7XNN)
     fn add_value_to_register(&mut self) {
-        println!("add value to register");
         let op_code = self.op_code;
         let x = (op_code & 0x0F00) >> 8;
 
         let value_nn = (op_code & 0x00FF) as u8;
+
+        println!("adding {:#06x} to register at {:#06x}", &value_nn, &x);
 
         self.general_variable_registers[x as usize] += value_nn;
     }
 
     /// Sets the index register to the last 3 nibbles of the given command (ANNN)
     fn set_index_register(&mut self) {
-        println!("set index register");
-        self.index_register = self.op_code & 0x0FFF
+        self.index_register = self.op_code & 0x0FFF;
+        println!("Set index register to {:#06x}", self.index_register);
     }
 
     /// Draws a pixel (DXYN)
@@ -223,11 +236,13 @@ impl EmulatorState {
 
         let ram = self.ram;
 
-        let x_index = ((op_code & 0x0F00 ) >> 8) as usize;
+        let x_index = ((op_code & 0x0F00) >> 8) as usize;
         let x_coordinate = self.general_variable_registers[x_index] % 64 /* mod 64 so that the value can wrap */;
 
         let y_index = ((op_code & 0x00F0) >> 4) as usize;
         let y_coordinate = self.general_variable_registers[y_index] % 32 /* mod 32 so that the value can wrap */;
+
+        let index_register = self.index_register;
 
         let height = op_code & 0x000F;
 
@@ -235,24 +250,23 @@ impl EmulatorState {
 
         let mut pixel: u8;
 
-        for row in 0..height {
+        println!("x: {} y:{} op:{:#06x} index:{:#06x}", x_coordinate, y_coordinate, op_code, index_register);
 
-            pixel = ram[(self.index_register + row) as usize];
+        for n in 0..height as u8 {
 
-            for column in 0..8 {
-                if (pixel & (0x80 >> column)) != 0 {
-                    if self.graphics_buffer[(x_coordinate + column + (y_coordinate + row as u8)) as usize] == 1 {
-                        self.general_variable_registers[0xF] = 0;
-                    }
-                    self.graphics_buffer[(x_coordinate + column + (y_coordinate + row as u8)) as usize] ^= 1;
+            let sprite_data = ram[(index_register - (n as u16)) as usize];
+
+            for bit in 0..8 as u8 {
+
+                if sprite_data & (0x80 >> bit) != 0 {
+
                 }
+
             }
 
         }
 
-        println!("drawing to screen")
     }
-
 }
 
 #[test]
@@ -311,8 +325,7 @@ fn sample_test() {
 
 #[test]
 fn sample_test_2() {
-
     let x = 1;
 
-    println!("{:#06x}",  x ^ 0)
+    println!("{:#06x}", x ^ 0)
 }

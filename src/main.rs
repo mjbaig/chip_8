@@ -18,9 +18,6 @@ lazy_static! {
     static ref EMULATOR_STATE: Mutex<EmulatorState> = Mutex::new(EmulatorState::new());
 }
 
-const WIDTH: u32 = 64;
-const HEIGHT: u32 = 32;
-
 fn main() -> Result<(), Error> {
     env_logger::init();
 
@@ -28,8 +25,12 @@ fn main() -> Result<(), Error> {
 
     let mut input = WinitInputHelper::new();
 
+    let screen_width = EMULATOR_STATE.lock().unwrap().screen_width();
+    let screen_height = EMULATOR_STATE.lock().unwrap().screen_height();
+    EMULATOR_STATE.lock().unwrap().load_rom(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
+
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(screen_width as f64, screen_height as f64);
         WindowBuilder::new()
             .with_title("chip 8 emulator?")
             .with_max_inner_size(size)
@@ -40,10 +41,8 @@ fn main() -> Result<(), Error> {
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(WIDTH, HEIGHT, surface_texture)?
+        Pixels::new(screen_width, screen_height, surface_texture)?
     };
-
-    EMULATOR_STATE.lock().unwrap().load_rom(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
 
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
@@ -61,11 +60,10 @@ fn main() -> Result<(), Error> {
                 *control_flow = ControlFlow::Exit;
                 return;
             }
-
-            EMULATOR_STATE.lock().unwrap().tick();
-
             window.request_redraw();
         }
+
+        EMULATOR_STATE.lock().unwrap().tick();
     });
 }
 
