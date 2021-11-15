@@ -66,32 +66,3 @@ fn main() -> Result<(), Error> {
         EMULATOR_STATE.lock().unwrap().tick();
     });
 }
-
-//This struct is temporary. I made it so that I could see that the screen is displaying pixels.
-struct ViewPort {}
-
-impl ViewPort {
-    fn new() -> Self {
-        Self {}
-    }
-
-    fn draw(&self, frame: &mut [u8]) {
-        println!("{}", frame.len());
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let num = rand::thread_rng().gen_range(1..10);
-
-            let random_red = rand::thread_rng().gen_range(0x00..0xFF);
-            let random_green = rand::thread_rng().gen_range(0x00..0xFF);
-            let random_blue = rand::thread_rng().gen_range(0x00..0xFF);
-
-            let rgba = if (i % num) == 0 {
-                [random_red, random_green, random_blue, 0xff]
-            } else {
-                [0x00, 0x00, 0x00, 0xff]
-            };
-
-            //edits a single pixel by copying the value from rgba.
-            pixel.copy_from_slice(&rgba)
-        }
-    }
-}

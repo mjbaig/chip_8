@@ -1,7 +1,5 @@
-use rand::distributions::uniform::SampleBorrow;
 use std::fs;
-use std::path::{PathBuf, Path};
-use std::time::Duration;
+use std::path::{Path};
 
 const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
@@ -95,9 +93,9 @@ impl EmulatorState {
         let contents_result = fs::read(&path);
 
         let rom = match contents_result {
-            Ok(T) => T,
-            Err(E) => panic!("could not load file at path: {}. Full Error: {}",
-                             &path.as_ref().to_str().unwrap(), E)
+            Ok(t) => t,
+            Err(e) => panic!("could not load file at path: {}. Full Error: {}",
+                             &path.as_ref().to_str().unwrap(), e)
         };
 
         // Load rom into memory
@@ -119,7 +117,7 @@ impl EmulatorState {
             let rgba = if self.graphics_buffer[i] == 1 {
                 [0x5e, 0x48, 0xe8, 0xff]
             } else {
-                [0x48, 0xb2, 0xe8, 0xff]
+                [0x00, 0x00, 0x00, 0xff]
             };
 
             pixel.copy_from_slice(&rgba);
@@ -135,7 +133,7 @@ impl EmulatorState {
 
         if (program_counter as usize + 1) < memory.len() {
             let first_byte = (memory[program_counter as usize] as u16) << 8;
-            let second_byte = (memory[(program_counter as usize) + 1] as u16);
+            let second_byte = memory[(program_counter as usize) + 1] as u16;
 
             self.op_code = first_byte | second_byte;
             self.program_counter = self.program_counter + 2;
@@ -181,7 +179,7 @@ impl EmulatorState {
         println!("returning from subroutine");
 
         self.program_counter = match new_program_counter {
-            Some(T) => T,
+            Some(t) => t,
             None => panic!("Cannot return from subroutine. The stack was empty."),
         }
     }
@@ -230,6 +228,34 @@ impl EmulatorState {
         println!("Set index register to {:#06x}", self.index_register);
     }
 
+    /// Draws a pixel on the buffer
+    fn set_pixel(&mut self, x_coordinate: u32, y_coordinate: u32) -> u8 {
+
+        let mut adjusted_x = x_coordinate;
+
+        let mut adjusted_y = y_coordinate;
+
+        // Wrap the value around if X is greater than the width
+        if adjusted_x > WIDTH {
+            adjusted_x -= WIDTH;
+        } else if adjusted_x < 0 {
+            adjusted_x += WIDTH;
+        }
+
+        if adjusted_y > HEIGHT {
+            adjusted_y -= HEIGHT;
+        } else if adjusted_y < 0 {
+            adjusted_y += HEIGHT
+        }
+
+        let location = adjusted_x + (adjusted_y * WIDTH);
+
+        self.graphics_buffer[location as usize] ^= 1;
+
+        return self.graphics_buffer[location as usize];
+
+    }
+
     /// Draws a pixel (DXYN)
     fn draw(&mut self) {
         let op_code = self.op_code;
@@ -248,23 +274,26 @@ impl EmulatorState {
 
         self.general_variable_registers[0xF] = 0; /* TODO find out why I set V0 to 0 */
 
-        let mut pixel: u8;
-
-        println!("x: {} y:{} op:{:#06x} index:{:#06x}", x_coordinate, y_coordinate, op_code, index_register);
-
         for n in 0..height as u8 {
 
-            let sprite_data = ram[(index_register - (n as u16)) as usize];
+            let mut sprite_data = ram[(index_register + (n as u16)) as usize];
 
             for bit in 0..8 as u8 {
 
-                if sprite_data & (0x80 >> bit) != 0 {
+                let pixel = sprite_data & (0x80);
 
+                if pixel > 0 {
+                    if self.set_pixel((x_coordinate + bit) as u32, (y_coordinate + n) as u32) == 1 {
+                        self.general_variable_registers[0xF] = 1;
+                        println!("x: {} y:{} op:{:#06x} index:{:#06x} pixel:{}", (x_index as u8 + bit), (y_index as u8 + n), op_code, index_register, pixel);
+                    }
                 }
-
+                sprite_data <<= 1;
             }
 
         }
+
+        self.should_redraw = true;
 
     }
 }
