@@ -11,7 +11,6 @@ use pixels::{SurfaceTexture, Pixels, Error};
 use winit::event::{Event, VirtualKeyCode};
 use log::error;
 use std::sync::Mutex;
-use rand::Rng;
 use emulator::EmulatorState;
 
 lazy_static! {
@@ -27,7 +26,7 @@ fn main() -> Result<(), Error> {
 
     let screen_width = EMULATOR_STATE.lock().unwrap().screen_width();
     let screen_height = EMULATOR_STATE.lock().unwrap().screen_height();
-    EMULATOR_STATE.lock().unwrap().load_rom(r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8");
+    EMULATOR_STATE.lock().unwrap().load_rom(r"/Users/mazbaig/Development/rust/chip_8/test_roms/IBM Logo.ch8");
 
     let window = {
         let size = LogicalSize::new(screen_width as f64, screen_height as f64);
