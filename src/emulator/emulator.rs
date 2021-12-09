@@ -341,7 +341,7 @@ fn run_cycle_test() {
 
 #[test]
 fn sample_test() {
-    let path = r"Z:\Documents\Dev\rust\chip_8\test_roms\IBM Logo.ch8";
+    let path = r"/Users/mazbaig/Development/rust/chip_8/test_roms/IBM Logo.ch8";
 
     let mut emulator_state = EmulatorState::new();
 
