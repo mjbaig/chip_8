@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path};
+use std::path::Path;
 
 const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
@@ -20,7 +20,7 @@ const FONT_DATA: [u8; 80] = [
     0xF0, 0x80, 0x80, 0x80, 0xF0, //C
     0xE0, 0x90, 0x90, 0x90, 0xE0, //D
     0xF0, 0x80, 0xF0, 0x80, 0xF0, //E
-    0xF0, 0x80, 0xF0, 0x80, 0x80  //F
+    0xF0, 0x80, 0xF0, 0x80, 0x80, //F
 ];
 
 pub struct EmulatorState {
@@ -94,8 +94,11 @@ impl EmulatorState {
 
         let rom = match contents_result {
             Ok(t) => t,
-            Err(e) => panic!("could not load file at path: {}. Full Error: {}",
-                             &path.as_ref().to_str().unwrap(), e)
+            Err(e) => panic!(
+                "could not load file at path: {}. Full Error: {}",
+                &path.as_ref().to_str().unwrap(),
+                e
+            ),
         };
 
         // Load rom into memory
@@ -147,20 +150,18 @@ impl EmulatorState {
         let op_code = self.op_code;
 
         match op_code & 0xF000 {
-            0x0000 => {
-                match op_code & 0x000F {
-                    0x0000 => self.clear_screen(),
-                    0x000E => self.return_from_subroutine(),
-                    _ => panic!("{:#06x} has not been implemented yet", self.op_code)
-                }
-            }
+            0x0000 => match op_code & 0x000F {
+                0x0000 => self.clear_screen(),
+                0x000E => self.return_from_subroutine(),
+                _ => panic!("{:#06x} has not been implemented yet", self.op_code),
+            },
             0x1000 => self.jump(),
             0x2000 => self.call_subroutine(),
             0x6000 => self.set_register(),
             0x7000 => self.add_value_to_register(),
             0xA000 => self.set_index_register(),
             0xD000 => self.draw(),
-            _ => panic!("{:#06x} has not been implemented yet", self.op_code)
+            _ => panic!("{:#06x} has not been implemented yet", self.op_code),
         }
     }
 
@@ -191,7 +192,6 @@ impl EmulatorState {
 
     /// Calls subroutine represented by the last three nibbles of the given command (2NNN)
     fn call_subroutine(&mut self) {
-
         println!("calling from subroutine");
 
         self.stack.push(self.program_counter);
@@ -230,7 +230,6 @@ impl EmulatorState {
 
     /// Draws a pixel on the buffer
     fn set_pixel(&mut self, x_coordinate: u32, y_coordinate: u32) -> u8 {
-
         let mut adjusted_x = x_coordinate;
 
         let mut adjusted_y = y_coordinate;
@@ -253,7 +252,6 @@ impl EmulatorState {
         self.graphics_buffer[location as usize] ^= 1;
 
         return self.graphics_buffer[location as usize];
-
     }
 
     /// Draws a pixel (DXYN)
@@ -275,26 +273,29 @@ impl EmulatorState {
         self.general_variable_registers[0xF] = 0; /* TODO find out why I set V0 to 0 */
 
         for n in 0..height as u8 {
-
             let mut sprite_data = ram[(index_register + (n as u16)) as usize];
 
             for bit in 0..8 as u8 {
-
                 let pixel = sprite_data & (0x80);
 
                 if pixel > 0 {
                     if self.set_pixel((x_coordinate + bit) as u32, (y_coordinate + n) as u32) == 1 {
                         self.general_variable_registers[0xF] = 1;
-                        println!("x: {} y:{} op:{:#06x} index:{:#06x} pixel:{}", (x_index as u8 + bit), (y_index as u8 + n), op_code, index_register, pixel);
+                        println!(
+                            "x: {} y:{} op:{:#06x} index:{:#06x} pixel:{}",
+                            (x_index as u8 + bit),
+                            (y_index as u8 + n),
+                            op_code,
+                            index_register,
+                            pixel
+                        );
                     }
                 }
                 sprite_data <<= 1;
             }
-
         }
 
         self.should_redraw = true;
-
     }
 }
 

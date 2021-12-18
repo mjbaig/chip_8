@@ -1,17 +1,18 @@
 #![forbid(unsafe_code)]
 
-#[path = "emulator/emulator.rs"] mod emulator;
+#[path = "emulator/emulator.rs"]
+mod emulator;
 
-use lazy_static::lazy_static;
-use winit::event_loop::{EventLoop, ControlFlow};
-use winit_input_helper::WinitInputHelper;
-use winit::dpi::LogicalSize;
-use winit::window::WindowBuilder;
-use pixels::{SurfaceTexture, Pixels, Error};
-use winit::event::{Event, VirtualKeyCode};
-use log::error;
-use std::sync::Mutex;
 use emulator::EmulatorState;
+use lazy_static::lazy_static;
+use log::error;
+use pixels::{Error, Pixels, SurfaceTexture};
+use std::sync::Mutex;
+use winit::dpi::LogicalSize;
+use winit::event::{Event, VirtualKeyCode};
+use winit::event_loop::{ControlFlow, EventLoop};
+use winit::window::WindowBuilder;
+use winit_input_helper::WinitInputHelper;
 
 lazy_static! {
     static ref EMULATOR_STATE: Mutex<EmulatorState> = Mutex::new(EmulatorState::new());
@@ -26,7 +27,10 @@ fn main() -> Result<(), Error> {
 
     let screen_width = EMULATOR_STATE.lock().unwrap().screen_width();
     let screen_height = EMULATOR_STATE.lock().unwrap().screen_height();
-    EMULATOR_STATE.lock().unwrap().load_rom(r"./test_roms/IBM Logo.ch8");
+    EMULATOR_STATE
+        .lock()
+        .unwrap()
+        .load_rom(r"./test_roms/IBM Logo.ch8");
 
     let window = {
         let size = LogicalSize::new(screen_width as f64, screen_height as f64);
@@ -34,7 +38,8 @@ fn main() -> Result<(), Error> {
             .with_title("chip 8 emulator?")
             .with_max_inner_size(size)
             .with_min_inner_size(size)
-            .build(&event_loop).unwrap()
+            .build(&event_loop)
+            .unwrap()
     };
 
     let mut pixels = {
@@ -45,10 +50,16 @@ fn main() -> Result<(), Error> {
 
     event_loop.run(move |event, _, control_flow| {
         if let Event::RedrawRequested(_) = event {
+            EMULATOR_STATE
+                .lock()
+                .unwrap()
+                .draw_screen(pixels.get_frame());
 
-            EMULATOR_STATE.lock().unwrap().draw_screen(pixels.get_frame());
-
-            if pixels.render().map_err(|e| error!("pixels.render() failed {}", e)).is_err() {
+            if pixels
+                .render()
+                .map_err(|e| error!("pixels.render() failed {}", e))
+                .is_err()
+            {
                 *control_flow = ControlFlow::Exit;
                 return;
             }
