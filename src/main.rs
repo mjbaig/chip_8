@@ -18,6 +18,8 @@ lazy_static! {
     static ref EMULATOR_STATE: Mutex<EmulatorState> = Mutex::new(EmulatorState::new());
 }
 
+const SCALE: u32 = 10;
+
 fn main() -> Result<(), Error> {
     env_logger::init();
 
@@ -33,7 +35,10 @@ fn main() -> Result<(), Error> {
         .load_rom(r"./test_roms/IBM Logo.ch8");
 
     let window = {
-        let size = LogicalSize::new(screen_width as f64, screen_height as f64);
+        let size = LogicalSize::new(
+            (screen_width * SCALE) as f64,
+            (screen_height * SCALE) as f64,
+        );
         WindowBuilder::new()
             .with_title("chip 8 emulator?")
             .with_max_inner_size(size)
