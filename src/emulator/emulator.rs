@@ -5,7 +5,8 @@ const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
 
 const FONT_DATA: [u8; 80] = [
-    0xF0, 0x90, 0x90, 0x90, 0xF0, //0
+    0xF0, 0x90, 0x90, 0x90,
+    0xF0, //0 -> these actually make the character in binary. Its magical.s
     0x20, 0x60, 0x20, 0x20, 0x70, //1
     0xF0, 0x10, 0xF0, 0x80, 0xF0, //2
     0xF0, 0x10, 0xF0, 0x10, 0xF0, //3
@@ -159,10 +160,64 @@ impl EmulatorState {
             0x2000 => self.call_subroutine(),
             0x6000 => self.set_register(),
             0x7000 => self.add_value_to_register(),
+            0x8000 => match op_code & 0x000F {
+                0x0000 => self.set(),
+                0x0001 => self.or(),
+                0x0002 => self.and(),
+                0x0003 => self.xor(),
+                0x0004 => self.add(),
+                0x0005 => panic!("not implemented VX = VX - VY"),
+                0x0006 => panic!("not implemented - Shift right"),
+                0x0007 => panic!("not implemented VX = VY - VX"),
+                0x000E => panic!("not implemented - Shift left"),
+                _ => panic!("{:#06x} has not been implemented yet", self.op_code),
+            },
             0xA000 => self.set_index_register(),
             0xD000 => self.draw(),
             _ => panic!("{:#06x} has not been implemented yet", self.op_code),
         }
+    }
+
+    fn set(&mut self) {
+        println!("Setting value of VX to VY");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] = self.general_variable_registers[y as usize];
+    }
+
+    fn or(&mut self) {
+        println!("OR -> VX is set to the bitwise/binary logical disjuction OR of VX and VY. VY is not affected.");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] |= self.general_variable_registers[y as usize];
+    }
+
+    fn and(&mut self) {
+        println!("AND -> VX is set to the bitwse/binary local conjunction (AND) of VX and VY. VY is not affected.");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] &= self.general_variable_registers[y as usize];
+    }
+
+    fn xor(&mut self) {
+        println!("Logical XOR -> VX is set to the bitwise/binary exclusive OR (XOR) of VX and VY. VY is not affected");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] ^= self.general_variable_registers[y as usize];
+    }
+
+    fn add(&mut self) {
+        println!("VX is set to the value of VX plus the value of VY. VY is not affected.");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] += self.general_variable_registers[y as usize];
+
+        panic!("TODO -> Add overflow carry stuff");
     }
 
     /// 00EO - Clears the graphics buffer and tells the client to redraw the screen.
