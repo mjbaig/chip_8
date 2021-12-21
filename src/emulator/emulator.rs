@@ -5,8 +5,7 @@ const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
 
 const FONT_DATA: [u8; 80] = [
-    0xF0, 0x90, 0x90, 0x90,
-    0xF0, //0 -> these actually make the character in binary. Its magical.s
+    0xF0, 0x90, 0x90, 0x90, 0xF0, //0
     0x20, 0x60, 0x20, 0x20, 0x70, //1
     0xF0, 0x10, 0xF0, 0x80, 0xF0, //2
     0xF0, 0x10, 0xF0, 0x10, 0xF0, //3
@@ -166,10 +165,10 @@ impl EmulatorState {
                 0x0002 => self.and(),
                 0x0003 => self.xor(),
                 0x0004 => self.add(),
-                0x0005 => panic!("not implemented VX = VX - VY"),
-                0x0006 => panic!("not implemented - Shift right"),
-                0x0007 => panic!("not implemented VX = VY - VX"),
-                0x000E => panic!("not implemented - Shift left"),
+                0x0005 => self.subtract_vy_from_vx(),
+                0x0006 => self.shift_right(),
+                0x0007 => self.subtract_vx_from_vy(),
+                0x000E => self.shift_left(),
                 _ => panic!("{:#06x} has not been implemented yet", self.op_code),
             },
             0xA000 => self.set_index_register(),
@@ -178,46 +177,116 @@ impl EmulatorState {
         }
     }
 
+    // 8XY0
     fn set(&mut self) {
         println!("Setting value of VX to VY");
         let x = (0x0F00 & self.op_code) >> 8;
         let y = (0x00F0 & self.op_code) >> 4;
 
         self.general_variable_registers[x as usize] = self.general_variable_registers[y as usize];
+        self.program_counter += 2;
     }
 
+    // 8XY1
     fn or(&mut self) {
         println!("OR -> VX is set to the bitwise/binary logical disjuction OR of VX and VY. VY is not affected.");
         let x = (0x0F00 & self.op_code) >> 8;
         let y = (0x00F0 & self.op_code) >> 4;
 
         self.general_variable_registers[x as usize] |= self.general_variable_registers[y as usize];
+        self.program_counter += 2;
     }
 
+    // 8XY2
     fn and(&mut self) {
         println!("AND -> VX is set to the bitwse/binary local conjunction (AND) of VX and VY. VY is not affected.");
         let x = (0x0F00 & self.op_code) >> 8;
         let y = (0x00F0 & self.op_code) >> 4;
 
         self.general_variable_registers[x as usize] &= self.general_variable_registers[y as usize];
+        self.program_counter += 2;
     }
 
+    // 8XY3
     fn xor(&mut self) {
         println!("Logical XOR -> VX is set to the bitwise/binary exclusive OR (XOR) of VX and VY. VY is not affected");
         let x = (0x0F00 & self.op_code) >> 8;
         let y = (0x00F0 & self.op_code) >> 4;
 
         self.general_variable_registers[x as usize] ^= self.general_variable_registers[y as usize];
+        self.program_counter += 2;
     }
 
+    // 8XY4
     fn add(&mut self) {
         println!("VX is set to the value of VX plus the value of VY. VY is not affected.");
         let x = (0x0F00 & self.op_code) >> 8;
         let y = (0x00F0 & self.op_code) >> 4;
 
-        self.general_variable_registers[x as usize] += self.general_variable_registers[y as usize];
+        let x_value = self.general_variable_registers[x as usize] as u16;
+        let y_value = self.general_variable_registers[y as usize] as u16;
 
-        panic!("TODO -> Add overflow carry stuff");
+        if y_value > (0xFF - x_value) {
+            self.general_variable_registers[0xF] = 1;
+        } else {
+            self.general_variable_registers[0xF] = 0;
+        }
+
+        self.general_variable_registers[x as usize] = ((x_value + y_value) & 0xFF) as u8;
+
+        self.program_counter += 2;
+    }
+
+    // 8XY5
+    fn subtract_vy_from_vx(&mut self) {
+        println!("Subtract vy from vx");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] = self.general_variable_registers[x as usize]
+            - self.general_variable_registers[y as usize];
+
+        self.program_counter += 2;
+    }
+
+    // 8XY6
+    fn shift_right(&mut self) {
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] = self.general_variable_registers[y as usize];
+
+        self.general_variable_registers[x as usize] =
+            self.general_variable_registers[x as usize] >> 1;
+
+        self.program_counter += 2;
+        panic!("set VF to 1 in some case");
+    }
+
+    // 8XY7
+    fn subtract_vx_from_vy(&mut self) {
+        println!("Subtract vx from vy");
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] = self.general_variable_registers[y as usize]
+            - self.general_variable_registers[x as usize];
+
+        self.program_counter += 2;
+    }
+
+    // 8XYE
+    fn shift_left(&mut self) {
+        let x = (0x0F00 & self.op_code) >> 8;
+        let y = (0x00F0 & self.op_code) >> 4;
+
+        self.general_variable_registers[x as usize] = self.general_variable_registers[y as usize];
+
+        self.general_variable_registers[x as usize] =
+            self.general_variable_registers[x as usize] << 1;
+
+        self.program_counter += 2;
+        panic!("set VF to 1 in some case");
     }
 
     /// 00EO - Clears the graphics buffer and tells the client to redraw the screen.
@@ -293,12 +362,14 @@ impl EmulatorState {
         if adjusted_x > WIDTH {
             adjusted_x -= WIDTH;
         } else if adjusted_x < 0 {
+            // The IDE thinks this comparison is useless for some reason. Removing it break the code, so I'm gonna have to walk through this one day.
             adjusted_x += WIDTH;
         }
 
         if adjusted_y > HEIGHT {
             adjusted_y -= HEIGHT;
         } else if adjusted_y < 0 {
+            // The IDE thinks this comparison is useless for some reason. Removing it break the code, so I'm gonna have to walk through this one day.
             adjusted_y += HEIGHT
         }
 
@@ -362,6 +433,44 @@ fn emulator_creation_test() {
 }
 
 #[test]
+fn test_addition_without_overflow() {
+    let mut emulator_state = EmulatorState::new();
+
+    emulator_state.op_code = 0x8014;
+
+    emulator_state.general_variable_registers[0] = 0x01;
+    emulator_state.general_variable_registers[1] = 0x02;
+
+    assert_eq!(0x01, emulator_state.general_variable_registers[0]);
+
+    assert_eq!(0x02, emulator_state.general_variable_registers[1]);
+
+    emulator_state.add();
+
+    assert_eq!(0x03, emulator_state.general_variable_registers[0]);
+    assert_eq!(0, emulator_state.general_variable_registers[0xF]);
+}
+
+#[test]
+fn test_addition_with_overflow() {
+    let mut emulator_state = EmulatorState::new();
+
+    emulator_state.op_code = 0x8014;
+
+    emulator_state.general_variable_registers[0] = 0xFF;
+    emulator_state.general_variable_registers[1] = 0x0F;
+
+    assert_eq!(0xFF, emulator_state.general_variable_registers[0]);
+
+    assert_eq!(0x0F, emulator_state.general_variable_registers[1]);
+
+    emulator_state.add();
+
+    assert_eq!(0x0E, emulator_state.general_variable_registers[0]);
+    assert_eq!(1, emulator_state.general_variable_registers[0xF]);
+}
+
+#[test]
 fn rom_load_test() {
     let path = r"./test_roms/IBM Logo.ch8";
 
@@ -403,7 +512,7 @@ fn sample_test() {
 
     emulator_state.load_rom(path);
 
-    for x in [1; 500] {
+    for _x in [1; 500] {
         emulator_state.tick();
     }
 }
